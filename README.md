@@ -62,15 +62,25 @@ A baseline original deste corpus resultou em **96 PASS / 2 SKIP / 0 FAIL**. Os S
 
 ## Pipeline XGuardian
 
-O workflow `.github/workflows/xguardian-sast.yml` usa a Action oficial do XGuardian fixada no commit:
+O workflow `.github/workflows/xguardian-sast.yml` usa a Action SAST oficial publicada em:
 
 ```text
-xmart-xguardian/xguardian-actions@8854a4b1ae87beada624979c8dd26d985bdf7957
+xguardian-actions/actions/sast
 ```
 
-O scan é **SAST-only**, usa política `0` e exclui `benchmark_meta`, `benchmark_tools`, `.github` e o `tsconfig.json` da massa enviada ao scanner. Assim, somente os casos controlados entram na medição.
+Para reprodutibilidade, o benchmark fixa a release `v26.6.2` pelo commit:
 
-A execução manual usa **development por padrão**. Execução automática em `push` só acontece quando `XGUARDIAN_PIPELINE_ENABLED=true` estiver configurado no repositório.
+```text
+xguardian-actions/actions/sast@6373d9375d3a859f602dcf53b37a3d8326c8a248
+```
+
+A autenticação usa o PAT `XGUARDIAN_TOKEN`, conforme o contrato atual da Action oficial. O workflow também exige `XGUARDIAN_TEAM_ID` e `XGUARDIAN_LANGUAGES` como Repository Variables.
+
+O scan é **SAST-only**. A lista `exclude` solicita ao XGuardian que `benchmark_meta`, `benchmark_tools`, `.github` e `cases/typescript/tsconfig.json` não participem da análise pontuada. A efetividade desse filtro deve ser validada no primeiro resultado do scan.
+
+A Action SAST específica `v26.6.2` utiliza os endpoints de **produção** do XGuardian e não expõe seletor `development/production`.
+
+Execução automática em `push` só acontece quando `XGUARDIAN_PIPELINE_ENABLED=true` estiver configurado no repositório.
 
 Veja [PIPELINE.md](PIPELINE.md) para configuração de Secrets/Variables e operação.
 
@@ -106,11 +116,10 @@ Não use `accuracy` isoladamente. Para SAST, principalmente, **Precision + Recal
 Um score só é comparável com outro quando permanecem registrados e controlados:
 
 - commit do benchmark;
-- ambiente XGuardian;
+- endpoint/ambiente efetivo usado pela Action;
 - commit/versão do engine;
 - versão/imagem dos scanners;
 - packs/custom rules;
-- política;
 - exclusões;
 - filtros/conditional audits e pós-processamento.
 
