@@ -73,8 +73,8 @@ jobs:
           token: ${{ secrets.XGUARDIAN_TOKEN }}
           app_id: ${{ vars.XGUARDIAN_APP_ID }}
           scan_directory: "cases"
-          translate: "false"
-          pdf: "false"
+          translate: "true"
+          pdf: "true"
           get_scan_id: "true"
 
       - name: Publish XGuardian scan metadata
