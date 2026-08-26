@@ -43,8 +43,6 @@ PIPELINE.md
 
 `benchmark_meta/ground_truth.full.json.gz` contém o catálogo completo de cada caso: ID, linguagem, caminho, expectativa vulnerável/benigna, CWE alvo e aceitos, categoria, variante, complexidade, track, linhas e racional.
 
-O arquivo está comprimido apenas para reduzir ruído/tamanho no Git. Os validadores e o avaliador o leem diretamente; não há perda semântica.
-
 Validação rápida:
 
 ```bash
@@ -62,27 +60,45 @@ A baseline original deste corpus resultou em **96 PASS / 2 SKIP / 0 FAIL**. Os S
 
 ## Pipeline XGuardian
 
-O workflow `.github/workflows/xguardian-sast.yml` usa a Action SAST oficial publicada em:
-
-```text
-xguardian-actions/actions/sast
-```
-
-Para reprodutibilidade, o benchmark fixa a release `v26.6.2` pelo commit:
+O workflow `.github/workflows/xguardian-sast.yml` usa a Action SAST oficial:
 
 ```text
 xguardian-actions/actions/sast@6373d9375d3a859f602dcf53b37a3d8326c8a248
 ```
 
-A autenticação usa o PAT `XGUARDIAN_TOKEN`, conforme o contrato atual da Action oficial. O workflow também exige `XGUARDIAN_TEAM_ID` e `XGUARDIAN_LANGUAGES` como Repository Variables.
+O SHA corresponde à release `v26.6.2`.
 
-O scan é **SAST-only**. A lista `exclude` solicita ao XGuardian que `benchmark_meta`, `benchmark_tools`, `.github` e `cases/typescript/tsconfig.json` não participem da análise pontuada. A efetividade desse filtro deve ser validada no primeiro resultado do scan.
+### Massa analisada
 
-A Action SAST específica `v26.6.2` utiliza os endpoints de **produção** do XGuardian e não expõe seletor `development/production`.
+O XGuardian recebe **somente `cases/`**:
 
-Execução automática em `push` só acontece quando `XGUARDIAN_PIPELINE_ENABLED=true` estiver configurado no repositório.
+```yaml
+scan_directory: "cases"
+```
 
-Veja [PIPELINE.md](PIPELINE.md) para configuração de Secrets/Variables e operação.
+Arquivos fora de `cases/` — documentação, ground truth, tooling e workflows — não entram no ZIP da Action.
+
+`cases/typescript/tsconfig.json` é removido somente do checkout temporário do runner antes do scan, porque serve para validação local e não pertence aos 164 casos pontuados. `cases/go/go.mod` permanece como contexto auxiliar do track Go.
+
+### Configuração da aplicação
+
+O benchmark usa uma aplicação existente por `XGUARDIAN_APP_ID`. Dessa forma, `languages`, `team_id` e `app_name` não precisam ser enviados pela pipeline.
+
+Isso também evita que o default de `languages` da Action (`["JavaScript"]`) gere metadata incorreta para um corpus poliglota.
+
+Configuração necessária:
+
+```text
+Secret:
+XGUARDIAN_TOKEN
+
+Variable:
+XGUARDIAN_APP_ID
+```
+
+Execução automática em `push` só acontece quando `XGUARDIAN_PIPELINE_ENABLED=true` estiver configurado.
+
+Veja [PIPELINE.md](PIPELINE.md) para detalhes operacionais.
 
 ## Avaliação do resultado
 
@@ -120,7 +136,6 @@ Um score só é comparável com outro quando permanecem registrados e controlado
 - commit/versão do engine;
 - versão/imagem dos scanners;
 - packs/custom rules;
-- exclusões;
 - filtros/conditional audits e pós-processamento.
 
 Acurácia não é uma constante do produto; é resultado de **corpus + versão + configuração + pipeline**.
