@@ -2,15 +2,6 @@ name: XGuardian SAST Accuracy Benchmark
 
 on:
   workflow_dispatch:
-    inputs:
-      xguardian_environment:
-        description: "XGuardian target environment"
-        required: true
-        default: development
-        type: choice
-        options:
-          - development
-          - production
   push:
     branches:
       - main
@@ -28,7 +19,7 @@ concurrency:
 
 jobs:
   sast-accuracy-scan:
-    # Push execution is opt-in to avoid accidental scan cost before repository setup.
+    # Push execution is opt-in to avoid accidental scan consumption before repository setup.
     if: github.event_name == 'workflow_dispatch' || vars.XGUARDIAN_PIPELINE_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -47,20 +38,14 @@ jobs:
       - name: Validate XGuardian configuration
         shell: bash
         env:
-          API_EMAIL: ${{ secrets.API_EMAIL }}
-          API_PASSWORD: ${{ secrets.API_PASSWORD }}
+          XGUARDIAN_TOKEN: ${{ secrets.XGUARDIAN_TOKEN }}
           XGUARDIAN_TEAM_ID: ${{ vars.XGUARDIAN_TEAM_ID }}
           XGUARDIAN_LANGUAGES: ${{ vars.XGUARDIAN_LANGUAGES }}
         run: |
           set -euo pipefail
 
-          if [[ -z "${API_EMAIL}" ]]; then
-            echo "::error::Missing repository secret API_EMAIL"
-            exit 1
-          fi
-
-          if [[ -z "${API_PASSWORD}" ]]; then
-            echo "::error::Missing repository secret API_PASSWORD"
+          if [[ -z "${XGUARDIAN_TOKEN}" ]]; then
+            echo "::error::Missing repository secret XGUARDIAN_TOKEN"
             exit 1
           fi
 
@@ -87,42 +72,23 @@ jobs:
               sys.exit("XGUARDIAN_LANGUAGES must be a non-empty JSON array of strings")
           PY
 
-      - name: Resolve benchmark execution mode
-        shell: bash
-        env:
-          REQUESTED_ENVIRONMENT: ${{ inputs.xguardian_environment || 'development' }}
-        run: |
-          set -euo pipefail
-          if [[ "${REQUESTED_ENVIRONMENT}" == "production" ]]; then
-            echo "XG_IS_DEVELOPMENT=false" >> "$GITHUB_ENV"
-          else
-            echo "XG_IS_DEVELOPMENT=true" >> "$GITHUB_ENV"
-          fi
-
       - name: Run XGuardian SAST benchmark
         id: xguardian
-        # Pinned to the current xguardian-actions v25.3.0 main HEAD for reproducibility.
-        uses: xmart-xguardian/xguardian-actions@8854a4b1ae87beada624979c8dd26d985bdf7957
+        # Official SAST Action, release v26.6.2 pinned by commit SHA for reproducibility.
+        uses: xguardian-actions/actions/sast@6373d9375d3a859f602dcf53b37a3d8326c8a248
         with:
-          api_email: ${{ secrets.API_EMAIL }}
-          api_password: ${{ secrets.API_PASSWORD }}
+          token: ${{ secrets.XGUARDIAN_TOKEN }}
           app_name: ${{ github.event.repository.name }}
           team_id: ${{ vars.XGUARDIAN_TEAM_ID }}
           languages: ${{ vars.XGUARDIAN_LANGUAGES }}
           description: "Controlled XGuardian SAST accuracy benchmark - intentional vulnerable and benign cases"
-          sast: "true"
-          sca: "false"
-          dast: "false"
-          policy_sast: "0"
           scan_directory: "."
-          # Keep benchmark tooling/ground-truth out of the SAST target. tsconfig.json is
-          # intentionally excluded because JSON is also classified as IaC by the current engine.
-          exclude: "benchmark_meta,benchmark_tools,.github,cases/typescript/tsconfig.json"
+          # Ground truth/tooling must not participate in benchmark scoring.
+          # The official Action forwards this exclude list to the XGuardian scan request.
+          exclude: "benchmark_meta/,benchmark_tools/,.github/,cases/typescript/tsconfig.json"
           translate: "false"
           pdf: "false"
           get_scan_id: "true"
-          save_vulns: "true"
-          is_development: ${{ env.XG_IS_DEVELOPMENT }}
 
       - name: Publish XGuardian scan metadata
         if: success()
@@ -141,8 +107,9 @@ jobs:
             echo "- Scan version: \`${SCAN_VERSION}\`"
             echo "- Results: ${SCAN_URL}"
             echo "- Ground truth: \`benchmark_meta/ground_truth.full.json.gz\`"
+            echo "- XGuardian Action: \`xguardian-actions/actions/sast@6373d9375d3a859f602dcf53b37a3d8326c8a248\` (v26.6.2)"
             echo
-            echo "After the scan result is exported as JSON, calculate TP/FP/FN/TN with:"
+            echo "After exporting the SAST result as JSON, calculate TP/FP/FN/TN with:"
             echo
             echo '\`\`\`bash'
             echo 'python3 benchmark_tools/evaluate_xguardian.py result.json --output-dir benchmark_score'
