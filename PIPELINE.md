@@ -2,28 +2,35 @@
 
 ## Objetivo
 
-Executar o corpus deste repositório pelo fluxo oficial do XGuardian sem misturar ground truth, scripts de avaliação ou arquivos de CI no alvo do SAST.
+Executar o corpus deste repositório pelo fluxo oficial do XGuardian usando a Action SAST publicada em `xguardian-actions/actions`, sem tratar ground truth, tooling de avaliação ou arquivos de CI como parte da medição.
 
-## Contrato utilizado
+## Referência oficial
 
-A pipeline referencia de forma imutável:
+A referência funcional da pipeline é:
 
 ```text
-xmart-xguardian/xguardian-actions@8854a4b1ae87beada624979c8dd26d985bdf7957
+xguardian-actions/actions/sast
 ```
 
-Esse SHA corresponde ao HEAD observado da release documentada como `v25.3.0` durante a configuração do benchmark.
+O benchmark fixa a release `v26.6.2` pelo SHA imutável:
 
-## Configuração obrigatória
+```text
+xguardian-actions/actions/sast@6373d9375d3a859f602dcf53b37a3d8326c8a248
+```
 
-Em **Settings → Secrets and variables → Actions**:
+Isso evita que alterações futuras em `main` mudem silenciosamente o comportamento de uma execução histórica do benchmark.
+
+## Autenticação
+
+A Action SAST atual autentica por **PAT (Personal Access Token)** do XGuardian.
+
+Em **Settings → Secrets and variables → Actions** configure:
 
 ### Repository Secrets
 
-- `API_EMAIL` — conta técnica/autorizada do XGuardian.
-- `API_PASSWORD` — senha correspondente.
+- `XGUARDIAN_TOKEN` — PAT gerado na plataforma XGuardian.
 
-Nunca versione essas credenciais no repositório.
+Nunca versione o token no repositório.
 
 ### Repository Variables
 
@@ -31,43 +38,43 @@ Nunca versione essas credenciais no repositório.
 - `XGUARDIAN_LANGUAGES` — array JSON com os nomes de linguagem aceitos pelo XGuardian para a aplicação.
 - `XGUARDIAN_PIPELINE_ENABLED` — opcional. Use `true` para permitir scans automáticos em pushes de `main`.
 
-Não existe fallback para `team_id=1`. Isso é intencional para evitar associação incorreta entre organização/equipe.
+Não existe fallback local para `team_id=1`; o workflow exige configuração explícita para evitar associação indevida de equipe.
 
-## O que entra no scan
+## Configuração do scan
 
-A Action recebe `scan_directory: "."`, mas o campo `exclude` remove:
+A pipeline usa:
 
 ```text
-benchmark_meta
-benchmark_tools
-.github
+scan_directory: "."
+translate: "false"
+pdf: "false"
+get_scan_id: "true"
+```
+
+A Action dedicada `sast/` já cria uma requisição SAST com `sast=true` e `sca=false`; portanto o workflow não replica flags de outros tipos de scan.
+
+O campo `exclude` enviado ao XGuardian contém:
+
+```text
+benchmark_meta/
+benchmark_tools/
+.github/
 cases/typescript/tsconfig.json
 ```
 
-Dessa forma, o ZIP montado pela Action mantém apenas o corpus que deve ser pontuado. O `tsconfig.json` é usado para validação de TypeScript, mas não pertence à massa do scanner e poderia ser tratado como IaC/JSON pelo engine.
+Importante: a implementação atual da Action cria o ZIP do diretório informado e encaminha `exclude` no payload de criação do scan. Portanto, a exclusão efetiva desses caminhos deve ser confirmada no primeiro resultado do XGuardian; o benchmark não assume silenciosamente que os arquivos foram removidos fisicamente do ZIP.
 
-## Baseline da execução
+## Ambiente
 
-- SAST: `true`
-- SCA: `false`
-- DAST: `false`
-- `policy_sast: 0`
-- `translate: false`
-- `pdf: false`
-- `save_vulns: true`
-- `get_scan_id: true`
-- ambiente manual padrão: `development`
+A Action específica `xguardian-actions/actions/sast@v26.6.2` configura diretamente os endpoints de **produção** do XGuardian.
 
-A política fica em `0` porque o corpus contém vulnerabilidades de propósito. Um quality gate que derrubasse a execução por encontrar vulnerabilidades invalidaria o objetivo do benchmark.
+Ela não expõe `is_development` nesse contrato. Por isso o benchmark não apresenta mais seletor development/production no workflow.
 
 ## Execução manual
 
-1. Configure os Secrets e Variables acima.
+1. Configure `XGUARDIAN_TOKEN`, `XGUARDIAN_TEAM_ID` e `XGUARDIAN_LANGUAGES`.
 2. Abra **Actions → XGuardian SAST Accuracy Benchmark**.
 3. Clique em **Run workflow**.
-4. Escolha `development` ou `production`.
-
-Use `development` para ensaio e validação, salvo necessidade explícita de medir produção.
 
 ## Execução automática
 
@@ -77,15 +84,22 @@ Defina:
 XGUARDIAN_PIPELINE_ENABLED=true
 ```
 
-A partir daí, mudanças relevantes em `cases/**`, ground truth ou no workflow, quando integradas em `main`, podem disparar novo scan.
+Com essa variável, mudanças relevantes em `cases/**`, no ground truth ou no workflow integradas em `main` podem disparar um novo scan.
 
-Sem essa variável, pushes não consomem scan.
+Sem a variável, pushes não consomem scan.
 
 ## Resultado
 
-A Action fornece `app_id`, `scan_id`, `scan_url` e `scan_version`. O workflow publica esses dados no **GitHub Job Summary**.
+A Action fornece:
 
-Após obter o JSON final do SAST:
+- `app_id`;
+- `scan_id`;
+- `scan_url`;
+- `scan_version`.
+
+O workflow publica esses dados no **GitHub Job Summary**.
+
+Após exportar o resultado SAST do XGuardian em JSON:
 
 ```bash
 python3 benchmark_tools/evaluate_xguardian.py result.json --output-dir benchmark_score
@@ -97,16 +111,9 @@ Para cada execução relevante, registre junto ao score:
 
 - commit do benchmark;
 - `scan_id` e `scan_version`;
-- ambiente;
-- SHA da XGuardian Action;
+- SHA/tag da XGuardian Action;
 - engine/scanners/rules observados;
-- configuração de excludes/política/filtros;
+- configuração de excludes e filtros;
 - falhas parciais, se houver.
 
 Não compare resultados de configurações diferentes como regressão ou evolução direta.
-
-## Risco conhecido da Action atual
-
-A implementação atual da Action possui um step que imprime os valores recebidos de email/senha. GitHub Actions normalmente mascara valores originados de Secrets, mas isso continua sendo uma prática inadequada na Action e deve ser removida em evolução própria do `xguardian-actions`.
-
-Este repositório não registra nem imprime diretamente essas credenciais.
