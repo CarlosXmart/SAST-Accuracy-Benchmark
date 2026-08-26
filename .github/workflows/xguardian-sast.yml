@@ -39,8 +39,7 @@ jobs:
         shell: bash
         env:
           XGUARDIAN_TOKEN: ${{ secrets.XGUARDIAN_TOKEN }}
-          XGUARDIAN_TEAM_ID: ${{ vars.XGUARDIAN_TEAM_ID }}
-          XGUARDIAN_LANGUAGES: ${{ vars.XGUARDIAN_LANGUAGES }}
+          XGUARDIAN_APP_ID: ${{ vars.XGUARDIAN_APP_ID }}
         run: |
           set -euo pipefail
 
@@ -49,28 +48,22 @@ jobs:
             exit 1
           fi
 
-          if [[ -z "${XGUARDIAN_TEAM_ID}" ]]; then
-            echo "::error::Missing repository variable XGUARDIAN_TEAM_ID (JSON array, e.g. [123])"
+          if [[ ! "${XGUARDIAN_APP_ID}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::XGUARDIAN_APP_ID must be the positive numeric ID of the dedicated benchmark application"
             exit 1
           fi
 
-          if [[ -z "${XGUARDIAN_LANGUAGES}" ]]; then
-            echo "::error::Missing repository variable XGUARDIAN_LANGUAGES (JSON array of XGuardian language names)"
-            exit 1
-          fi
+      - name: Prepare cases-only scan payload
+        shell: bash
+        run: |
+          set -euo pipefail
 
-          python3 - <<'PY'
-          import json, os, sys
+          # tsconfig.json exists only for local TypeScript validation and is not a scored benchmark case.
+          rm -f cases/typescript/tsconfig.json
 
-          team_ids = json.loads(os.environ["XGUARDIAN_TEAM_ID"])
-          languages = json.loads(os.environ["XGUARDIAN_LANGUAGES"])
-
-          if not isinstance(team_ids, list) or not team_ids or not all(isinstance(v, int) and v > 0 for v in team_ids):
-              sys.exit("XGUARDIAN_TEAM_ID must be a non-empty JSON array of positive integer IDs")
-
-          if not isinstance(languages, list) or not languages or not all(isinstance(v, str) and v.strip() for v in languages):
-              sys.exit("XGUARDIAN_LANGUAGES must be a non-empty JSON array of strings")
-          PY
+          test -d cases
+          echo "Only the cases/ directory will be packaged by the XGuardian Action."
+          echo "Scored source files: $(find cases -type f ! -name 'go.mod' | wc -l)"
 
       - name: Run XGuardian SAST benchmark
         id: xguardian
@@ -78,14 +71,8 @@ jobs:
         uses: xguardian-actions/actions/sast@6373d9375d3a859f602dcf53b37a3d8326c8a248
         with:
           token: ${{ secrets.XGUARDIAN_TOKEN }}
-          app_name: ${{ github.event.repository.name }}
-          team_id: ${{ vars.XGUARDIAN_TEAM_ID }}
-          languages: ${{ vars.XGUARDIAN_LANGUAGES }}
-          description: "Controlled XGuardian SAST accuracy benchmark - intentional vulnerable and benign cases"
-          scan_directory: "."
-          # Ground truth/tooling must not participate in benchmark scoring.
-          # The official Action forwards this exclude list to the XGuardian scan request.
-          exclude: "benchmark_meta/,benchmark_tools/,.github/,cases/typescript/tsconfig.json"
+          app_id: ${{ vars.XGUARDIAN_APP_ID }}
+          scan_directory: "cases"
           translate: "false"
           pdf: "false"
           get_scan_id: "true"
@@ -106,6 +93,7 @@ jobs:
             echo "- Scan ID: \`${SCAN_ID}\`"
             echo "- Scan version: \`${SCAN_VERSION}\`"
             echo "- Results: ${SCAN_URL}"
+            echo "- Scanned directory: \`cases/\` only"
             echo "- Ground truth: \`benchmark_meta/ground_truth.full.json.gz\`"
             echo "- XGuardian Action: \`xguardian-actions/actions/sast@6373d9375d3a859f602dcf53b37a3d8326c8a248\` (v26.6.2)"
             echo
