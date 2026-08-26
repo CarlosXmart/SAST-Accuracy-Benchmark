@@ -1,0 +1,18 @@
+{
+  "total_cases": 164,
+  "vulnerable_cases": 82,
+  "benign_cases": 82,
+  "by_language": {
+    "c": {"total": 14, "vulnerable": 7, "benign": 7},
+    "cpp": {"total": 14, "vulnerable": 7, "benign": 7},
+    "csharp": {"total": 12, "vulnerable": 6, "benign": 6},
+    "go": {"total": 16, "vulnerable": 8, "benign": 8},
+    "java": {"total": 20, "vulnerable": 10, "benign": 10},
+    "javascript": {"total": 16, "vulnerable": 8, "benign": 8},
+    "php": {"total": 12, "vulnerable": 6, "benign": 6},
+    "python": {"total": 20, "vulnerable": 10, "benign": 10},
+    "ruby": {"total": 12, "vulnerable": 6, "benign": 6},
+    "terraform": {"total": 12, "vulnerable": 6, "benign": 6},
+    "typescript": {"total": 16, "vulnerable": 8, "benign": 8}
+  }
+}
