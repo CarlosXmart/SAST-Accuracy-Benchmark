@@ -1,0 +1,27 @@
+name: Benchmark Integrity
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout benchmark
+        uses: actions/checkout@v4
+
+      - name: Validate ground truth
+        run: python3 benchmark_tools/check_ground_truth.py
+
+      - name: Check for real-secret patterns
+        run: python3 benchmark_tools/check_no_real_secrets.py
+
+      - name: Python tooling syntax
+        run: python3 -m py_compile benchmark_tools/*.py

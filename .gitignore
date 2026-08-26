@@ -1,0 +1,19 @@
+# Local benchmark outputs
+benchmark_score/
+.validation/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local archives and environment files
+*.zip
+.env
+.env.*
