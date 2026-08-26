@@ -1,116 +1,117 @@
-# XGuardian SAST Accuracy Benchmark v1.0
+# XGuardian SAST Accuracy Benchmark
 
-Benchmark poliglota controlado para medir **precisão, recall, taxa de falsos positivos, discriminação e coerência de CWE** do pipeline SAST do XGuardian.
+Benchmark controlado e poliglota para medir a acurácia do pipeline **SAST efetivo do XGuardian**.
 
-> **NÃO implante nem execute os trechos vulneráveis.** Eles existem exclusivamente como massa estática de scanner. A validação incluída compila/analisa sintaxe quando a toolchain está disponível, sem chamar funções vulneráveis.
+> **Segurança:** este repositório contém vulnerabilidades intencionais. Ele existe exclusivamente para análise estática. Não publique, execute ou implante os casos vulneráveis como aplicação real.
 
-## Escopo
+## Escopo v1
 
-- **164 casos catalogados**
-- **82 vulneráveis intencionais**
-- **82 benignos/hard-negatives**
+- **164 casos controlados**
+- **82 vulnerabilidades reais intencionais (positivos)**
+- **82 casos benignos / hard-negatives (negativos)**
 - **26 CWEs-alvo**
-- Linguagens/trilhas: C, C++, C#, Go, Java, JavaScript, PHP, Python, Ruby, Terraform e TypeScript
-- `core`: código-fonte tradicional
-- `iac`: Terraform, reportado separadamente para não mascarar a acurácia do SAST de código
-- Ground truth: `benchmark_meta/ground_truth.json` e `benchmark_meta/ground_truth.csv`
-- Avaliador: `benchmark_tools/evaluate_xguardian.py`
-- Validador: `benchmark_tools/validate_suite.py`
+- C, C++, C#, Go, Java, JavaScript, PHP, Python, Ruby, TypeScript e Terraform
+- track `core` para código tradicional e track `iac` para Terraform
 
-## Artefatos de entrega
-
-Há dois artefatos distintos por desenho:
-
-1. **`xguardian-sast-accuracy-scan-payload-v1.zip`** — é o único ZIP que deve ser enviado ao XGuardian. Contém apenas os casos a serem escaneados.
-2. **`xguardian-sast-accuracy-benchmark-v1.zip`** — kit de avaliação, ground truth, metodologia, validadores e cópia auditável dos casos. **Não use este ZIP como entrada do scan**, pois scripts e metadados do próprio benchmark contaminariam a medição.
-
-O `tsconfig.json` usado para validar TypeScript existe somente no kit completo e não no payload de scan, evitando que um JSON de build seja interpretado como IaC pelo pipeline atual.
-
-## Como medir o XGuardian
-
-1. Crie uma aplicação de benchmark dedicada e isolada de código de cliente.
-2. Envie **somente `xguardian-sast-accuracy-scan-payload-v1.zip`** para um scan SAST.
-3. Não altere regras, exclusões, conditional audits ou pós-processamento em relação ao baseline que deseja medir.
-4. Registre o commit/versão/configuração efetiva do XGuardian e dos scanners.
-5. Preserve o resultado original do scan e exporte o SAST em JSON.
-6. No kit completo, execute:
-
-```bash
-python3 benchmark_tools/evaluate_xguardian.py /caminho/resultado-xguardian.json --output-dir benchmark_score
-```
-
-7. Consulte:
-   - `benchmark_score/score.json`
-   - `benchmark_score/case_results.csv`
-   - `benchmark_score/unmatched_findings.json`
-   - `benchmark_score/extraneous_findings.json`
-
-## Métricas
-
-Não use `accuracy` isoladamente.
-
-- **Precision / PPV** = `TP / (TP + FP)` — quanto do que foi acusado nos casos controlados é realmente vulnerável.
-- **Recall / TPR** = `TP / (TP + FN)` — quanto das vulnerabilidades reais foi encontrado.
-- **FPR** = `FP / (FP + TN)` — quanto dos hard-negatives foi acusado indevidamente.
-- **Specificity** = `TN / (TN + FP)`.
-- **F1** — equilíbrio entre precision e recall.
-- **Balanced Accuracy** — média de TPR e specificity.
-- **MCC** — correlação da matriz de confusão, útil mesmo com distribuição desigual em recortes.
-- **OWASP-style score** = `100 × (TPR − FPR)`.
-- **Taxonomy accuracy** — percentual de TPs cujo CWE reportado pertence ao conjunto aceito pelo caso.
-
-O `score.json` traz resultado **overall**, por **track** (`core` e `iac`), por linguagem e por CWE.
-
-## O que é um falso positivo neste corpus
-
-Um arquivo em `negative/` é deliberadamente benigno, mas desenhado para se parecer com um padrão vulnerável: SQL parametrizado, comando constante, URL allowlisted, parser XML endurecido, validação de origin, bounds check, API segura, segredo sintético em fixture, logging não sensível etc.
-
-**Qualquer finding em um arquivo benigno conta como FP no nível de caso.** Isso evita “perdoar” uma regra apenas porque ela apontou outra linha do mesmo honeypot.
-
-Em arquivos positivos, findings claramente fora do intervalo anotado são preservados em `extraneous_findings.json` para revisão e não são silenciosamente usados para transformar um FN em TP.
-
-## Reprodutibilidade
-
-Para comparar versões do XGuardian, mantenha iguais:
-
-- hash do payload;
-- exclusões;
-- branch/commit do engine;
-- imagem/versão de scanner;
-- packs e custom rules;
-- modo de scan;
-- conditional audits/filtros;
-- formato de resultado usado pelo avaliador.
-
-Nunca compare dois scores obtidos com configurações diferentes como se fossem regressão/evolução do scanner.
+Cada caso vive em um arquivo isolado e possui marcadores `XG-BENCH:<ID> START/END`. Isso permite matching determinístico entre o finding do XGuardian e o ground truth.
 
 ## Estrutura
 
 ```text
-cases/<linguagem>/positive/   # vulnerabilidades reais intencionais
-cases/<linguagem>/negative/   # hard-negatives / honeypots seguros
-benchmark_meta/               # ground truth, metodologia, baseline, hashes e validações
-benchmark_tools/              # avaliação e verificações locais
+.github/workflows/
+  benchmark-validation.yml   # valida integridade sem disparar scan
+  xguardian-sast.yml         # executa o SAST no XGuardian
+cases/
+  <language>/positive/       # vulnerabilidades intencionais
+  <language>/negative/       # hard-negatives / honeypots seguros
+benchmark_meta/
+  ground_truth.full.json.gz  # catálogo completo e revisado dos 164 casos
+  methodology.md
+  expected_counts.json
+  xguardian_baseline.md
+  references.md
+  runbook.md
+benchmark_tools/
+  check_ground_truth.py
+  check_no_real_secrets.py
+  validate_suite.py
+  evaluate_xguardian.py
+PIPELINE.md
 ```
 
-## Critério de aceite do benchmark
+## Ground truth
 
-Antes de uso:
+`benchmark_meta/ground_truth.full.json.gz` contém o catálogo completo de cada caso: ID, linguagem, caminho, expectativa vulnerável/benigna, CWE alvo e aceitos, categoria, variante, complexidade, track, linhas e racional.
+
+O arquivo está comprimido apenas para reduzir ruído/tamanho no Git. Os validadores e o avaliador o leem diretamente; não há perda semântica.
+
+Validação rápida:
 
 ```bash
 python3 benchmark_tools/check_ground_truth.py
 python3 benchmark_tools/check_no_real_secrets.py
+```
+
+Validação ampla das toolchains disponíveis:
+
+```bash
 python3 benchmark_tools/validate_suite.py
 ```
 
-O pacote é aceitável quando:
+A baseline original deste corpus resultou em **96 PASS / 2 SKIP / 0 FAIL**. Os SKIPs eram ausência de toolchain de compilação C# e do binário Terraform no ambiente de validação; não foram apresentados como PASS.
 
-- ground truth retorna zero inconsistências;
-- nenhum padrão de segredo real é encontrado;
-- o validador apresenta `FAIL = 0`;
-- qualquer `SKIP` por toolchain indisponível está explicitamente documentado;
-- o self-test do avaliador confirma matrizes perfeita, tudo-detectado e nada-detectado.
+## Pipeline XGuardian
 
-## Limite importante
+O workflow `.github/workflows/xguardian-sast.yml` usa a Action oficial do XGuardian fixada no commit:
 
-Este pacote define a verdade conhecida. **Ele não contém nem inventa um percentual de acurácia do XGuardian.** TP/FP/FN/TN, precision, recall e F1 só existem depois que a versão/configuração real do XGuardian for executada contra o payload.
+```text
+xmart-xguardian/xguardian-actions@8854a4b1ae87beada624979c8dd26d985bdf7957
+```
+
+O scan é **SAST-only**, usa política `0` e exclui `benchmark_meta`, `benchmark_tools`, `.github` e o `tsconfig.json` da massa enviada ao scanner. Assim, somente os casos controlados entram na medição.
+
+A execução manual usa **development por padrão**. Execução automática em `push` só acontece quando `XGUARDIAN_PIPELINE_ENABLED=true` estiver configurado no repositório.
+
+Veja [PIPELINE.md](PIPELINE.md) para configuração de Secrets/Variables e operação.
+
+## Avaliação do resultado
+
+Após exportar o resultado SAST do XGuardian em JSON:
+
+```bash
+python3 benchmark_tools/evaluate_xguardian.py result.json --output-dir benchmark_score
+```
+
+O avaliador aceita:
+
+- export JSON do XGuardian com `arquivo` / `linha` / `cwe`;
+- resultado SARIF-like do engine;
+- JSON bruto do Semgrep.
+
+Ele gera:
+
+- `score.json`
+- `case_results.csv`
+- `unmatched_findings.json`
+- `extraneous_findings.json`
+
+## Métricas
+
+O benchmark calcula **TP, TN, FP, FN, Precision, Recall/TPR, FPR, Specificity, F1, Accuracy, Balanced Accuracy, MCC, OWASP-style score e Taxonomy Accuracy**, com breakdown geral, por track, linguagem e CWE.
+
+Não use `accuracy` isoladamente. Para SAST, principalmente, **Precision + Recall + FPR** explicam muito melhor a qualidade do scanner.
+
+## Regra de comparação
+
+Um score só é comparável com outro quando permanecem registrados e controlados:
+
+- commit do benchmark;
+- ambiente XGuardian;
+- commit/versão do engine;
+- versão/imagem dos scanners;
+- packs/custom rules;
+- política;
+- exclusões;
+- filtros/conditional audits e pós-processamento.
+
+Acurácia não é uma constante do produto; é resultado de **corpus + versão + configuração + pipeline**.

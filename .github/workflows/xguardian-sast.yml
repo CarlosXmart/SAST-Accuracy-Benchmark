@@ -16,8 +16,7 @@ on:
       - main
     paths:
       - "cases/**"
-      - "benchmark_meta/ground_truth.json"
-      - "benchmark_meta/ground_truth.csv"
+      - "benchmark_meta/ground_truth.full.json.gz"
       - ".github/workflows/xguardian-sast.yml"
 
 permissions:
@@ -123,7 +122,6 @@ jobs:
           pdf: "false"
           get_scan_id: "true"
           save_vulns: "true"
-          pipeaction: "noAction"
           is_development: ${{ env.XG_IS_DEVELOPMENT }}
 
       - name: Publish XGuardian scan metadata
@@ -142,7 +140,7 @@ jobs:
             echo "- Scan ID: \`${SCAN_ID}\`"
             echo "- Scan version: \`${SCAN_VERSION}\`"
             echo "- Results: ${SCAN_URL}"
-            echo "- Ground truth: \`benchmark_meta/ground_truth.json\`"
+            echo "- Ground truth: \`benchmark_meta/ground_truth.full.json.gz\`"
             echo
             echo "After the scan result is exported as JSON, calculate TP/FP/FN/TN with:"
             echo
